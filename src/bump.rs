@@ -15,7 +15,7 @@ pub struct BumpAllocator {
 
 
 impl BumpAllocator {
-    ///ici on initialise notre heap a 0
+    ///on commence par initialiser notre heap a 0
     pub const fn new() -> Self {
         BumpAllocator {
             heap_start: 0,
@@ -35,13 +35,13 @@ impl BumpAllocator {
     }
 }
 
-//ici on défini le trait globalalloc en unsafe par ce qu'on modifie de la memoire
+///on défini le trait globalalloc en unsafe par ce qu'on modifie de la memoire
 unsafe impl GlobalAlloc for Locked<BumpAllocator> {
     //on va définir deux method en unsafe, alloc et dealloc, pour allouer et deallouer de la memoire, encore une fois on utilise unsafe pour garantir
     //la securité de la memoire
     //on utilise layout pour avoir la memoire et la taille qu'il faut, ca garanti que les allocations restent a l'intereieur de leur region de memoire dans la heap
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        //ici on prend une reference mutable pour modifier l'état interne
+        //on prend une reference mutable pour modifier l'état interne
         let mut bump = self.lock();
         //align_up
         let alloc_start = align_up(bump.next, layout.align());
@@ -52,7 +52,7 @@ unsafe impl GlobalAlloc for Locked<BumpAllocator> {
         };
 
 
-        //ici on vérifie si alloc_end dépasse la limite de la heap
+        //on vérifie si alloc_end dépasse la limite de la heap
         if alloc_end > bump.heap_end {
             //c'est qu'il y a pas assez de mémoire, on renvoie un pointeur null
             ptr::null_mut()
@@ -68,9 +68,9 @@ unsafe impl GlobalAlloc for Locked<BumpAllocator> {
 
 
     }
-    //ici on défini dealloc
+    //on défini dealloc
     unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) {
-        //ici on reprend une reference mutable pour modifier l'état interne
+        //ion reprend une reference mutable pour modifier l'état interne
         let mut bump = self.lock();
         //on enleve 1 a notre incrementation car on deallou
         bump.allocations -= 1;
