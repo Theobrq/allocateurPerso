@@ -1,55 +1,54 @@
 #![no_std]
 #![no_main]
 
-///Definition du trait pour implémenter global alloc
-/// Alloc : alloue une taille de mémoire et d'allignement défini
-/// Dealloc : free la memoire alloué juste avant
-/// `Ressources` :
-/// - https://doc.rust-lang.org/std/alloc/struct.Layout.html
-/// - https://doc.rust-lang.org/stable/std/alloc/trait.GlobalAlloc.html
-/// - https://doc.rust-lang.org/std/primitive.usize.html
-pub unsafe trait GlobAlloc{
-    unsafe fn alloc(&self, size: usize, align: usize) -> *mut u8;
+extern crate alloc;
+mod bump;
+use crate::bump::BumpAllocator;
+use core::panic::PanicInfo;
 
-    unsafe fn dealloc(&self, ptr: *mut u8, size: usize, align: usize);
+
+//on créer notre propre heap
+pub const HEAP_SIZE: usize = 100 * 1024;
+pub const HEAP_START: usize = 0x0010;
+
+pub struct Locked<A> {
+    inner: spin::Mutex<A>,
 }
 
-
-///Suivre le nombre d'allocation
-/// `Ressources` :
-/// - https://bd103.github.io/blog/2023-06-27-global-allocators
-/// -
-//compteur
-pub struct Counter(u64);
-
-impl Counter{
-    //initialiser a 0
-    pub const fn new() -> Self{
-        Counter(0)
+impl<A> Locked<A> {
+    pub const fn new(inner: A) -> Self {
+        Locked {
+            inner: spin::Mutex::new(inner),
+        }
     }
-    //retourner le nbr actuel
-    pub fn count(&self) -> u64{
-        self.0
+
+    pub fn lock(&self) -> spin::MutexGuard<A> {
+        self.inner.lock()
     }
 }
 
-
-///Definition de mon propre allocateur
-/// `Ressources` :
-/// - https://bd103.github.io/blog/2023-06-27-global-allocators
-/// -
-pub struct customAlloc;
-
-unsafe impl GlobAlloc for customAlloc{
-    unsafe fn alloc(&self, size: usize, align: usize) -> *mut u8 {
-
-    }
-    unsafe fn dealloc(&self, ptr: *mut u8, size: usize, align: usize) {
-
-    }
+//ici on utilise une fonctione pour calculer l'alignement
+//elle aligne l'adresse memoire addr vers la prochaine adresse qui est multiple de 2
+fn align_up(addr: usize, align: usize) -> usize {
+    (addr + align - 1) & !(align - 1)
 }
 
-
-/// Enregistrement de mon allocateur
 #[global_allocator]
-static A: customAlloc= customAlloc;
+static ALLOCATOR: Locked<BumpAllocator> = Locked::new(BumpAllocator::new());
+
+
+
+#[panic_handler]
+fn panic(_info: &PanicInfo) -> ! {
+    loop {}
+}
+
+
+#[no_mangle]
+pub extern "C" fn _start() -> ! {
+    unsafe {
+        ALLOCATOR.lock().init(HEAP_START, HEAP_SIZE);
+    }
+    
+    loop {}
+}
